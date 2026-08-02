@@ -1,0 +1,548 @@
+{
+  "uid": "secmetrics-overview",
+  "title": "secMetrics — Security Overview",
+  "description": "Postur keamanan gabungan dari seluruh security scanner. Setiap panel punya deskripsi; arahkan kursor ke ikon (i) di pojok panel untuk membaca alasan pemilihan metrik dan query-nya.",
+  "tags": ["security", "devsecops"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "time": { "from": "now-3h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "project",
+        "label": "Project",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+        "query": "label_values(secmetrics_scan_success, project)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "sort": 1
+      },
+      {
+        "name": "tool",
+        "label": "Tool",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+        "query": "label_values(secmetrics_scan_success, tool)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "sort": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Critical",
+      "description": "Jumlah temuan critical dari seluruh tool.\n\nPromQL: sum(secmetrics_vulnerabilities{severity=\"critical\"})\n\nAngka ini yang menentukan apakah rilis boleh jalan atau tidak. Nilai > 0 langsung berwarna merah — tidak ada zona 'agak aman' untuk critical.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum(secmetrics_vulnerabilities{severity=\"critical\", project=~\"$project\", tool=~\"$tool\"})",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "dark-red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "High",
+      "description": "PromQL: sum(secmetrics_vulnerabilities{severity=\"high\"})\n\nAmbang batasnya lebih longgar dari critical: beberapa temuan high biasanya dapat ditoleransi sementara, tapi lebih dari 20 menandakan base image atau dependency yang sudah terlalu tertinggal.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum(secmetrics_vulnerabilities{severity=\"high\", project=~\"$project\", tool=~\"$tool\"})",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Medium",
+      "description": "PromQL: sum(secmetrics_vulnerabilities{severity=\"medium\"})\n\nDitampilkan sebagai konteks, bukan pemicu tindakan. Warnanya sengaja netral supaya tidak bersaing memperebutkan perhatian dengan critical/high.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum(secmetrics_vulnerabilities{severity=\"medium\", project=~\"$project\", tool=~\"$tool\"})",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "yellow" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "yellow", "value": null }] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Low",
+      "description": "PromQL: sum(secmetrics_vulnerabilities{severity=\"low\"})",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum(secmetrics_vulnerabilities{severity=\"low\", project=~\"$project\", tool=~\"$tool\"})",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "text" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Skor Risiko",
+      "description": "PromQL: sum(secmetrics_risk_score)\n\nSatu angka berbobot (critical=100, high=10, medium=3, low=1).\n\nKenapa perlu: '2 critical, 63 high, 80 medium' sulit dibandingkan antar-minggu. Satu angka langsung menjawab 'membaik atau memburuk?'. Angka ini untuk melihat TREN; untuk TINDAKAN tetap pakai breakdown per severity di sebelah kiri.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum(secmetrics_risk_score{project=~\"$project\", tool=~\"$tool\"})",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 200 },
+              { "color": "red", "value": 1000 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Scan terakhir",
+      "description": "PromQL: time() - max(secmetrics_scan_timestamp_seconds)\n\nPANEL PALING PENTING DI BARIS INI, meski terlihat paling membosankan.\n\nPushgateway menahan nilai terakhir SELAMANYA. Kalau pipeline scan mati tiga hari lalu, semua angka di atas tetap tampil rapi dan terlihat 'segar' — padahal basi. Dashboard keamanan yang basi lebih berbahaya daripada tidak punya dashboard sama sekali, karena menciptakan rasa aman yang keliru.\n\nPanel ini yang membedakan 'aman' dari 'tidak ada yang memeriksa'.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "time() - max(secmetrics_scan_timestamp_seconds{project=~\"$project\", tool=~\"$tool\"})",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 86400 },
+              { "color": "red", "value": 259200 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Tren temuan per severity",
+      "description": "PromQL: sum by (severity) (secmetrics_vulnerabilities)\n\nINI ALASAN UTAMA MEMAKAI PROMETHEUS, bukan sekadar membaca file JSON.\n\nOutput scanner hanya menjawab 'berapa temuan hari ini'. Deret waktu menjawab pertanyaan yang jauh lebih berguna: 'apakah utang keamanan kita membaik atau memburuk?'.\n\nGaris ini berbentuk tangga (bukan kurva halus) karena angkanya hanya berubah saat scan dijalankan. Setelah otomasi di Milestone 6, setiap commit akan meninggalkan satu titik data — dan lonjakan mendadak langsung terlihat berasal dari perubahan mana.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum by (severity) (secmetrics_vulnerabilities{project=~\"$project\", tool=~\"$tool\"})",
+          "legendFormat": "{{severity}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": ["lastNotNull", "max"]
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "spanNulls": true,
+            "stacking": { "mode": "none", "group": "A" },
+            "axisPlacement": "auto",
+            "gradientMode": "opacity"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "critical" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "dark-red" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "high" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "medium" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "low" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "unknown" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "text" } }]
+          }
+        ]
+      }
+    },
+    {
+      "id": 8,
+      "type": "piechart",
+      "title": "Asal kerentanan: OS vs Library",
+      "description": "PromQL: sum by (target_type) (secmetrics_vulnerabilities)\n\nPanel ini menjawab pertanyaan 'siapa yang harus mengerjakan?', bukan sekadar 'berapa banyak'.\n\n  os      -> paket sistem dari base image. Diperbaiki dengan MENGGANTI BASE IMAGE. Biasanya satu perubahan kecil menghapus ratusan temuan sekaligus.\n  library -> dependency aplikasi. Diperbaiki dengan MENAIKKAN VERSI di requirements.txt, satu per satu, dan berisiko memutus kompatibilitas.\n\nDua jalur kerja berbeda, sering dua tim berbeda. Total gabungan tanpa pembedaan ini tidak bisa ditindaklanjuti.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum by (target_type) (secmetrics_vulnerabilities{project=~\"$project\", tool=~\"$tool\"})",
+          "legendFormat": "{{target_type}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "pieType": "donut",
+        "displayLabels": ["percent"],
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "values": ["value", "percent"]
+        },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "gauge",
+      "title": "Bisa langsung diperbaiki",
+      "description": "PromQL:\n  100 * sum(secmetrics_vulnerabilities_fixable)\n       / sum(secmetrics_vulnerabilities)\n\nPersentase temuan yang sudah tersedia versi perbaikannya dari vendor.\n\nIni metrik pengambilan keputusan, bukan metrik teknis. Backlog 182 temuan terasa mustahil dikerjakan. Tapi kalau 60% di antaranya sudah punya fix, artinya sebagian besar bisa selesai hari ini hanya dengan menaikkan versi — sisanya baru butuh mitigasi. Menggabungkan keduanya dalam satu angka membuat tim menyerah sebelum mulai.\n\nAngka rendah justru sinyal berbeda: banyak zero-day tanpa patch, yang berarti pilihan base image-nya yang bermasalah.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 9, "w": 6, "x": 0, "y": 13 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "100 * sum(secmetrics_vulnerabilities_fixable{project=~\"$project\", tool=~\"$tool\"}) / sum(secmetrics_vulnerabilities{project=~\"$project\", tool=~\"$tool\"})",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 40 },
+              { "color": "green", "value": 70 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Temuan paling parah (50 teratas)",
+      "description": "PromQL:\n  secmetrics_finding_info\n    * on (project, tool, severity) group_left() secmetrics_severity_weight\n\nKenapa perkalian itu perlu: bagi Prometheus, label 'critical' hanyalah teks — tidak lebih besar dari 'low'. Tabel jadi tidak bisa diurutkan menurut keparahan.\n\nSolusinya vector matching: kalikan metrik detail (yang nilainya selalu 1) dengan metrik bobot severity. Deretnya tetap sama, tapi nilainya kini berupa angka bobot, sehingga bisa diurutkan secara numerik. 'group_left()' menandakan sisi kiri adalah sisi 'banyak' — ada ratusan temuan, tapi hanya lima nilai bobot.\n\nDaftar ini sengaja dibatasi 50 temuan untuk menjaga cardinality Prometheus. Angka agregat di panel lain tetap menghitung SELURUH temuan.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 9, "w": 18, "x": 6, "y": 13 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "secmetrics_finding_info{project=~\"$project\", tool=~\"$tool\"} * on (project, tool, severity) group_left() secmetrics_severity_weight",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "component": true,
+              "instance": true,
+              "environment": true,
+              "monitor": true
+            },
+            "indexByName": {
+              "severity": 0,
+              "identifier": 1,
+              "package": 2,
+              "installed_version": 3,
+              "fixed_version": 4,
+              "target_type": 5,
+              "project": 6,
+              "tool": 7,
+              "Value": 8
+            },
+            "renameByName": {
+              "severity": "Severity",
+              "identifier": "ID",
+              "package": "Paket",
+              "installed_version": "Versi terpasang",
+              "fixed_version": "Ada fix di",
+              "target_type": "Jenis",
+              "project": "Project",
+              "tool": "Tool",
+              "Value": "Bobot"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": { "fields": {}, "sort": [{ "field": "Bobot", "desc": true }] }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": { "show": false, "reducer": ["sum"], "countRows": false, "fields": "" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "filterable": true },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Severity" },
+            "properties": [
+              { "id": "custom.width", "value": 110 },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": { "color": "dark-red", "index": 0, "text": "CRITICAL" },
+                      "high": { "color": "red", "index": 1, "text": "HIGH" },
+                      "medium": { "color": "orange", "index": 2, "text": "MEDIUM" },
+                      "low": { "color": "yellow", "index": 3, "text": "LOW" },
+                      "unknown": { "color": "text", "index": 4, "text": "UNKNOWN" }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Ada fix di" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": { "none": { "color": "red", "index": 0, "text": "belum ada" } }
+                  }
+                ]
+              },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Bobot" },
+            "properties": [{ "id": "custom.width", "value": 80 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "ID" },
+            "properties": [{ "id": "custom.width", "value": 180 }]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+reports/
+*.sarif
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+.env
+*.env
+!.env.example
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
