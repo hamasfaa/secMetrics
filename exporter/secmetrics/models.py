@@ -34,10 +34,15 @@ def normalize_severity(raw: str | None) -> str:
     return value if value in SEVERITIES else "unknown"
 
 
+def relative_path(path: str) -> str:
+    for prefix in ("/src/", "/app/", "./"):
+        if path.startswith(prefix):
+            return path[len(prefix) :]
+    return path.lstrip("/")
+
+
 @dataclass(frozen=True)
 class Finding:
-    """Satu temuan keamanan, apa pun scanner asalnya."""
-
     tool: str                     # "trivy" | "semgrep" | "gitleaks"
     project: str
     severity: str

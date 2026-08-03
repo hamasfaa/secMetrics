@@ -11,6 +11,12 @@ NAMESPACE = "secmetrics"
 
 DEFAULT_DETAIL_LIMIT = 50
 
+_DEFAULT_TARGET_TYPES = {
+    "trivy": ("os", "library"),
+    "semgrep": ("code",),
+    "gitleaks": ("secret",),
+}
+
 
 def build_registry(
     findings: list[Finding],
@@ -44,7 +50,9 @@ def build_registry(
         if f.is_fixable:
             by_sev_fixable[f.severity] += 1
 
-    seen_target_types = {t for _, t in by_sev_target} or {"os", "library"}
+    seen_target_types = {t for _, t in by_sev_target} or set(
+        _DEFAULT_TARGET_TYPES.get(tool, ("unknown",))
+    )
     for severity in SEVERITIES:
         for target_type in seen_target_types:
             vulns.labels(project, tool, severity, target_type).set(

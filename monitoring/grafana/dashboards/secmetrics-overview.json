@@ -347,8 +347,8 @@
     {
       "id": 8,
       "type": "piechart",
-      "title": "Asal kerentanan: OS vs Library",
-      "description": "PromQL: sum by (target_type) (secmetrics_vulnerabilities)\n\nPanel ini menjawab pertanyaan 'siapa yang harus mengerjakan?', bukan sekadar 'berapa banyak'.\n\n  os      -> paket sistem dari base image. Diperbaiki dengan MENGGANTI BASE IMAGE. Biasanya satu perubahan kecil menghapus ratusan temuan sekaligus.\n  library -> dependency aplikasi. Diperbaiki dengan MENAIKKAN VERSI di requirements.txt, satu per satu, dan berisiko memutus kompatibilitas.\n\nDua jalur kerja berbeda, sering dua tim berbeda. Total gabungan tanpa pembedaan ini tidak bisa ditindaklanjuti.",
+      "title": "Asal temuan",
+      "description": "PromQL: sum by (target_type) (secmetrics_vulnerabilities)\n\nPanel ini menjawab 'siapa yang harus mengerjakan?', bukan sekadar 'berapa banyak'. Setiap jenis punya jalur perbaikan yang berbeda:\n\n  os      -> paket sistem dari base image. Diperbaiki dengan MENGGANTI BASE IMAGE. Satu perubahan kecil sering menghapus ratusan temuan sekaligus.\n  library -> dependency aplikasi. Diperbaiki dengan MENAIKKAN VERSI di requirements.txt, satu per satu, dan berisiko memutus kompatibilitas.\n  code    -> pola berbahaya di kode sendiri (Semgrep). Diperbaiki dengan menulis ulang kodenya; tidak ada versi yang bisa dinaikkan.\n  secret  -> kredensial ter-commit (Gitleaks). Menghapus barisnya TIDAK CUKUP — kredensialnya harus dirotasi, karena sudah dianggap bocor.\n\nEmpat jalur kerja berbeda, sering empat orang berbeda. Angka total tanpa pembedaan ini tidak bisa ditindaklanjuti.",
       "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
       "gridPos": { "h": 9, "w": 8, "x": 16, "y": 4 },
       "targets": [
@@ -384,17 +384,55 @@
       }
     },
     {
-      "id": 9,
-      "type": "gauge",
-      "title": "Bisa langsung diperbaiki",
-      "description": "PromQL:\n  100 * sum(secmetrics_vulnerabilities_fixable)\n       / sum(secmetrics_vulnerabilities)\n\nPersentase temuan yang sudah tersedia versi perbaikannya dari vendor.\n\nIni metrik pengambilan keputusan, bukan metrik teknis. Backlog 182 temuan terasa mustahil dikerjakan. Tapi kalau 60% di antaranya sudah punya fix, artinya sebagian besar bisa selesai hari ini hanya dengan menaikkan versi — sisanya baru butuh mitigasi. Menggabungkan keduanya dalam satu angka membuat tim menyerah sebelum mulai.\n\nAngka rendah justru sinyal berbeda: banyak zero-day tanpa patch, yang berarti pilihan base image-nya yang bermasalah.",
+      "id": 11,
+      "type": "bargauge",
+      "title": "Temuan per tool",
+      "description": "PromQL: sum by (tool) (secmetrics_vulnerabilities)\n\nTiga tool, tiga sumber risiko yang sama sekali berbeda:\n\n  trivy    -> kerentanan pada paket yang KITA PAKAI (dependency & base image)\n  semgrep  -> pola berbahaya pada kode yang KITA TULIS\n  gitleaks -> kredensial yang tanpa sengaja ikut ter-commit\n\nTidak ada satu pun yang bisa menggantikan yang lain. Dependency sempurna tidak menolong kalau kodenya memanggil eval() pada input user; kode sempurna tidak menolong kalau kunci AWS-nya ada di dalam repo.\n\nPerhatikan juga selisih JUMLAHNYA: Trivy menghasilkan ratusan temuan, Semgrep dan Gitleaks hanya belasan. Itu bukan berarti dua yang terakhir kurang penting — satu private key yang bocor lebih mendesak daripada 100 CVE medium di paket OS. Inilah sebabnya panel severity dan panel 'Secret terekspos' dipisahkan dari angka total.",
       "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
-      "gridPos": { "h": 9, "w": 6, "x": 0, "y": 13 },
+      "gridPos": { "h": 8, "w": 10, "x": 0, "y": 13 },
       "targets": [
         {
           "refId": "A",
           "editorMode": "code",
-          "expr": "100 * sum(secmetrics_vulnerabilities_fixable{project=~\"$project\", tool=~\"$tool\"}) / sum(secmetrics_vulnerabilities{project=~\"$project\", tool=~\"$tool\"})",
+          "expr": "sum by (tool) (secmetrics_vulnerabilities{project=~\"$project\", tool=~\"$tool\"})",
+          "legendFormat": "{{tool}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "minVizWidth": 8,
+        "minVizHeight": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": { "mode": "continuous-BlYlRd" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "gauge",
+      "title": "Patch dependency tersedia",
+      "description": "PromQL:\n  100 * sum(secmetrics_vulnerabilities_fixable{tool=\"trivy\"})\n       / sum(secmetrics_vulnerabilities{tool=\"trivy\"})\n\nPersentase kerentanan dependency yang sudah tersedia versi perbaikannya dari vendor.\n\nIni metrik pengambilan keputusan, bukan metrik teknis. Backlog 182 temuan terasa mustahil dikerjakan. Tapi kalau 60% di antaranya sudah punya fix, sebagian besar bisa selesai hari ini hanya dengan menaikkan versi — sisanya baru butuh mitigasi. Menggabungkan keduanya dalam satu angka membuat tim menyerah sebelum mulai.\n\nAngka rendah justru sinyal berbeda: banyak kerentanan tanpa patch, yang berarti pilihan base image-nya yang bermasalah.\n\nCATATAN: panel ini SENGAJA dikunci ke tool=trivy dan mengabaikan filter Tool di atas. 'Tersedia patch dari vendor' hanya bermakna untuk kerentanan dependency. Temuan Semgrep dan Gitleaks selalu bisa diperbaiki (tinggal ubah kode / rotasi kredensial), jadi memasukkannya ke pembagian ini hanya akan mengencerkan angkanya tanpa menambah informasi.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 8, "w": 7, "x": 10, "y": 13 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "100 * sum(secmetrics_vulnerabilities_fixable{project=~\"$project\", tool=\"trivy\"}) / sum(secmetrics_vulnerabilities{project=~\"$project\", tool=\"trivy\"})",
           "instant": true,
           "range": false
         }
@@ -426,12 +464,53 @@
       }
     },
     {
+      "id": 12,
+      "type": "stat",
+      "title": "Secret terekspos",
+      "description": "PromQL: sum(secmetrics_vulnerabilities{tool=\"gitleaks\"})\n\nDipisahkan dari angka lain karena sifatnya berbeda secara fundamental.\n\nCVE adalah RISIKO — belum tentu dieksploitasi. Secret yang ter-commit adalah KEBOCORAN yang sudah terjadi. Begitu kredensial masuk ke repo, ia harus dianggap sudah bocor, bahkan bila repo-nya privat: ia tersimpan di riwayat git setiap orang yang pernah clone, di cache CI, dan di backup.\n\nKarena itu 'menghapus barisnya lalu commit' TIDAK menyelesaikan masalah — kredensialnya wajib DIROTASI. Angka ini harus selalu nol; nilai berapa pun di atas nol adalah insiden, bukan backlog.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 8, "w": 7, "x": 17, "y": 13 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum(secmetrics_vulnerabilities{project=~\"$project\", tool=\"gitleaks\"})",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "dark-red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
       "id": 10,
       "type": "table",
       "title": "Temuan paling parah (50 teratas)",
       "description": "PromQL:\n  secmetrics_finding_info\n    * on (project, tool, severity) group_left() secmetrics_severity_weight\n\nKenapa perkalian itu perlu: bagi Prometheus, label 'critical' hanyalah teks — tidak lebih besar dari 'low'. Tabel jadi tidak bisa diurutkan menurut keparahan.\n\nSolusinya vector matching: kalikan metrik detail (yang nilainya selalu 1) dengan metrik bobot severity. Deretnya tetap sama, tapi nilainya kini berupa angka bobot, sehingga bisa diurutkan secara numerik. 'group_left()' menandakan sisi kiri adalah sisi 'banyak' — ada ratusan temuan, tapi hanya lima nilai bobot.\n\nDaftar ini sengaja dibatasi 50 temuan untuk menjaga cardinality Prometheus. Angka agregat di panel lain tetap menghitung SELURUH temuan.",
       "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
-      "gridPos": { "h": 9, "w": 18, "x": 6, "y": 13 },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 21 },
       "targets": [
         {
           "refId": "A",
@@ -469,8 +548,8 @@
             "renameByName": {
               "severity": "Severity",
               "identifier": "ID",
-              "package": "Paket",
-              "installed_version": "Versi terpasang",
+              "package": "Paket / Lokasi",
+              "installed_version": "Versi / Baris",
               "fixed_version": "Ada fix di",
               "target_type": "Jenis",
               "project": "Project",
