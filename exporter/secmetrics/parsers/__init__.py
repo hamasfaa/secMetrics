@@ -2,14 +2,19 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ..models import Finding
-from . import gitleaks, semgrep, trivy
+from ..models import ComplianceCheck, Finding
+from . import docker_bench, gitleaks, semgrep, trivy
 
-# Satu-satunya tempat yang perlu disentuh saat menambah scanner baru.
 PARSERS: dict[str, Callable[[Any, str], list[Finding]]] = {
     "trivy": trivy.parse,
     "semgrep": semgrep.parse,
     "gitleaks": gitleaks.parse,
 }
 
-__all__ = ["PARSERS"]
+COMPLIANCE_PARSERS: dict[str, Callable[[Any, str], list[ComplianceCheck]]] = {
+    "docker-bench": docker_bench.parse,
+}
+
+ALL_TOOLS = sorted({**PARSERS, **COMPLIANCE_PARSERS})
+
+__all__ = ["PARSERS", "COMPLIANCE_PARSERS", "ALL_TOOLS"]

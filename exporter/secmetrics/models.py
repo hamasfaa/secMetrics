@@ -42,6 +42,21 @@ def relative_path(path: str) -> str:
 
 
 @dataclass(frozen=True)
+class ComplianceCheck:
+    tool: str
+    project: str
+    benchmark: str
+    check_id: str
+    title: str
+    status: str
+    section: str
+
+    @property
+    def is_scored(self) -> bool:
+        return self.status in ("pass", "warn")
+
+
+@dataclass(frozen=True)
 class Finding:
     tool: str                     # "trivy" | "semgrep" | "gitleaks"
     project: str

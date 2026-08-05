@@ -1,0 +1,118 @@
+groups:
+  - name: secmetrics-vulnerabilities
+    interval: 30s
+    rules:
+      - alert: SecretExposed
+        expr: sum by (project) (secmetrics_vulnerabilities{tool="gitleaks"}) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: vulnerability
+        annotations:
+          summary: "{{ $value }} secret terekspos di project {{ $labels.project }}"
+          description: >-
+            Gitleaks menemukan kredensial di dalam source code.
+            TINDAKAN: rotasi kredensialnya sekarang. Menghapus barisnya saja
+            tidak cukup -- nilainya sudah ada di riwayat git setiap orang yang
+            pernah clone, di cache CI, dan di backup.
+
+      - alert: CriticalVulnerabilityPresent
+        expr: sum by (project) (secmetrics_vulnerabilities{severity="critical"}) > 0
+        for: 10m
+        labels:
+          severity: critical
+          category: vulnerability
+        annotations:
+          summary: "{{ $value }} kerentanan critical di project {{ $labels.project }}"
+          description: >-
+            TINDAKAN: cek panel "Temuan paling parah" di dashboard. Kalau
+            kolom "Ada fix di" terisi, naikkan versinya. Kalau "belum ada",
+            pertimbangkan mengganti base image atau menghapus dependency-nya.
+
+      - alert: NewCriticalVulnerability
+        expr: >-
+          sum by (project) (secmetrics_vulnerabilities{severity="critical"})
+          -
+          sum by (project) (secmetrics_vulnerabilities{severity="critical"} offset 1h)
+          > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: vulnerability
+        annotations:
+          summary: "{{ $value }} kerentanan critical BARU di {{ $labels.project }}"
+          description: >-
+            Jumlah critical bertambah dibanding 1 jam lalu. Kemungkinan besar
+            berasal dari perubahan dependency atau base image yang baru masuk.
+            TINDAKAN: periksa commit terakhir sebelum lonjakan ini.
+
+      - alert: RiskScoreSpike
+        expr: >-
+          secmetrics_risk_score > 1.2 * (secmetrics_risk_score offset 24h)
+          and secmetrics_risk_score offset 24h > 0
+        for: 15m
+        labels:
+          severity: warning
+          category: vulnerability
+        annotations:
+          summary: "Skor risiko {{ $labels.project }}/{{ $labels.tool }} naik >20% dalam 24 jam"
+          description: >-
+            Kenaikan bertahap sering luput dari pantauan karena tidak ada satu
+            momen yang mencolok. Alert ini menangkap tren, bukan lonjakan.
+
+  - name: secmetrics-pipeline
+    interval: 30s
+    rules:
+      - alert: SecurityScanStale
+        expr: time() - secmetrics_scan_timestamp_seconds > 86400
+        for: 30m
+        labels:
+          severity: warning
+          category: pipeline
+        annotations:
+          summary: "Scan {{ $labels.tool }} pada {{ $labels.project }} basi (>24 jam)"
+          description: >-
+            Angka di dashboard masih ditampilkan Pushgateway, tapi sudah tidak
+            mencerminkan keadaan sekarang. TINDAKAN: periksa apakah workflow
+            GitHub Actions gagal atau tidak terjadwal.
+
+      - alert: SecurityScanFailed
+        expr: secmetrics_scan_success == 0
+        for: 5m
+        labels:
+          severity: warning
+          category: pipeline
+        annotations:
+          summary: "Scan {{ $labels.tool }} pada {{ $labels.project }} gagal di-parse"
+          description: >-
+            Exporter menerima file tapi gagal membacanya -- biasanya karena
+            scanner berubah format output setelah naik versi.
+
+      - alert: PushgatewayDown
+        expr: up{job="pushgateway"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          category: pipeline
+        annotations:
+          summary: "Pushgateway tidak bisa di-scrape"
+          description: >-
+            Seluruh metrik keamanan mengalir lewat Pushgateway. Selama ia mati,
+            dashboard membeku dan tidak ada satu pun alert kerentanan yang bisa
+            dipercaya.
+
+  - name: secmetrics-compliance
+    interval: 60s
+    rules:
+      - alert: ComplianceScoreBelowTarget
+        expr: secmetrics_compliance_score < 70
+        for: 15m
+        labels:
+          severity: warning
+          category: compliance
+        annotations:
+          summary: 'Skor kepatuhan {{ $labels.benchmark }} = {{ $value | printf "%.1f" }}% (target 70%)'
+          description: >-
+            TINDAKAN: lihat panel "Kontrol gagal per section". Section 5
+            (Container Runtime) paling bisa diperbaiki sendiri lewat Compose
+            file -- memory limit, read-only rootfs, no-new-privileges.

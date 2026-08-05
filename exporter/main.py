@@ -3,13 +3,19 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 from prometheus_client import generate_latest
 
-from secmetrics.metrics import DEFAULT_DETAIL_LIMIT, build_registry
+from secmetrics.metrics import (
+    COMPLIANCE_STATUSES,
+    DEFAULT_DETAIL_LIMIT,
+    build_compliance_registry,
+    build_registry,
+)
 from secmetrics.models import SEVERITIES
-from secmetrics.parsers import PARSERS
+from secmetrics.parsers import ALL_TOOLS, COMPLIANCE_PARSERS, PARSERS
 from secmetrics.pusher import DEFAULT_JOB, push
 
 
@@ -20,7 +26,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--tool",
         required=True,
-        choices=sorted(PARSERS),
+        choices=ALL_TOOLS,
         help="Scanner yang menghasilkan file input.",
     )
     p.add_argument("--input", required=True, type=Path, help="Path file output scanner.")
@@ -52,13 +58,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    is_compliance = args.tool in COMPLIANCE_PARSERS
 
-    findings = []
+    items: list = []
     scan_success = True
 
     try:
         raw = json.loads(args.input.read_text(encoding="utf-8"))
-        findings = PARSERS[args.tool](raw, args.project)
+        parser = COMPLIANCE_PARSERS[args.tool] if is_compliance else PARSERS[args.tool]
+        items = parser(raw, args.project)
     except FileNotFoundError:
         print(f"[error] file tidak ditemukan: {args.input}", file=sys.stderr)
         scan_success = False
@@ -66,19 +74,35 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[error] JSON tidak valid di {args.input}: {exc}", file=sys.stderr)
         scan_success = False
 
-    registry = build_registry(
-        findings=findings,
-        project=args.project,
-        tool=args.tool,
-        detail_limit=args.detail_limit,
-        scan_success=scan_success,
-    )
-
-    counts = {s: 0 for s in SEVERITIES}
-    for f in findings:
-        counts[f.severity] += 1
-    summary = "  ".join(f"{s}={counts[s]}" for s in SEVERITIES)
-    print(f"[{args.tool}/{args.project}] {len(findings)} temuan  |  {summary}")
+    if is_compliance:
+        benchmark = items[0].benchmark if items else "unknown"
+        registry = build_compliance_registry(
+            checks=items,
+            project=args.project,
+            tool=args.tool,
+            benchmark=benchmark,
+            detail_limit=args.detail_limit,
+            scan_success=scan_success,
+        )
+        counts = Counter(c.status for c in items)
+        scored = counts["pass"] + counts["warn"]
+        score = 100.0 * counts["pass"] / scored if scored else 0.0
+        summary = "  ".join(f"{s}={counts[s]}" for s in COMPLIANCE_STATUSES)
+        print(
+            f"[{args.tool}/{args.project}] {len(items)} kontrol  |  {summary}"
+            f"  |  skor = {score:.1f}%"
+        )
+    else:
+        registry = build_registry(
+            findings=items,
+            project=args.project,
+            tool=args.tool,
+            detail_limit=args.detail_limit,
+            scan_success=scan_success,
+        )
+        counts = Counter(f.severity for f in items)
+        summary = "  ".join(f"{s}={counts[s]}" for s in SEVERITIES)
+        print(f"[{args.tool}/{args.project}] {len(items)} temuan  |  {summary}")
 
     if args.dry_run:
         print(generate_latest(registry).decode("utf-8"))

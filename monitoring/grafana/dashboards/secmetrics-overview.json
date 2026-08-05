@@ -622,6 +622,155 @@
           }
         ]
       }
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Kepatuhan — CIS Docker Benchmark",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+      "panels": []
+    },
+    {
+      "id": 21,
+      "type": "gauge",
+      "title": "Skor Kepatuhan CIS",
+      "description": "PromQL: secmetrics_compliance_score{benchmark=\"cis-docker\"}\n\nPersentase kontrol CIS Docker Benchmark yang lulus.\n\nRUMUS:  100 * pass / (pass + warn)\n\nDocker Bench punya skor bawaannya sendiri (+1 tiap PASS, -1 tiap WARN) yang menghasilkan angka 12 pada mesin ini. Angka itu sengaja TIDAK dipakai karena:\n\n  1. Tidak berbatas — bisa negatif, tidak punya nilai maksimum, jadi tidak bisa jadi gauge 0-100 maupun dibandingkan antar-sistem.\n  2. Tidak bisa ditafsirkan — '12' tidak menjawab pertanyaan auditor: berapa persen kontrol yang lulus?\n  3. Tidak stabil — menambah kontrol baru ke benchmark mengubah skor meski konfigurasi sistem tidak berubah.\n\nStatus INFO dan NOTE dikeluarkan dari pembagi. Docker Bench memakainya untuk kontrol yang tidak bisa diputuskan otomatis (mis. 'pastikan image dipindai berkala'). Menghitungnya sebagai kegagalan akan menghukum sistem atas hal yang belum tentu salah, dan membuat skor mustahil mencapai 100.\n\nCATATAN PENTING soal angka di lingkungan ini: pada Docker Desktop, 'host' yang diaudit adalah VM Linux internal, bukan Windows. Sebagian kontrol karenanya tidak relevan. Skor ini sahih sebagai DEMO dan sebagai garis dasar untuk melihat TREN, tapi jangan dikutip sebagai hasil audit Docker Desktop yang sesungguhnya.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "secmetrics_compliance_score{benchmark=\"cis-docker\"}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 60 },
+              { "color": "yellow", "value": 75 },
+              { "color": "green", "value": 90 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 22,
+      "type": "bargauge",
+      "title": "Kontrol gagal (WARN) per section",
+      "description": "PromQL: sum by (section) (secmetrics_compliance_checks{status=\"warn\"})\n\nSkor tunggal memberi tahu SEBERAPA BURUK; panel ini memberi tahu HARUS MULAI DARI MANA.\n\nSection CIS Docker Benchmark:\n  1 Host Configuration            — audit, partisi, kernel\n  2 Docker daemon configuration   — TLS, user namespace, logging\n  3 Daemon configuration files    — kepemilikan & izin file\n  4 Container Images & Build File — base image, HEALTHCHECK, content trust\n  5 Container Runtime             — hak akses container yang sedang berjalan\n  6 Docker Security Operations    — proses operasional\n  7 Docker Swarm Configuration    — hanya relevan bila memakai Swarm\n\nSection 5 adalah yang paling bisa kita kendalikan sendiri dari Compose file (memory limit, read-only rootfs, no-new-privileges). Section 1 dan 2 menyangkut konfigurasi host/daemon yang biasanya milik tim infrastruktur.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 8, "w": 10, "x": 6, "y": 32 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "sum by (section) (secmetrics_compliance_checks{status=\"warn\"}) > 0",
+          "legendFormat": "{{section}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "minVizWidth": 8,
+        "minVizHeight": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "color": { "mode": "continuous-YlRd" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "orange", "value": null }] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 23,
+      "type": "table",
+      "title": "Kontrol CIS yang gagal",
+      "description": "PromQL: secmetrics_compliance_check_info\n\nDaftar kontrol berstatus WARN, lengkap dengan nomor kontrol CIS-nya. Nomor itu penting: ia bisa langsung dirujuk ke dokumen CIS Docker Benchmark resmi, sehingga temuan di dashboard bisa ditelusuri ke standar yang mendasarinya — persis yang diminta auditor.\n\nBerbeda dari tabel kerentanan di atas, di sini tidak ada kolom severity. CIS tidak memberi peringkat keparahan pada kontrolnya; yang ada hanya lulus atau tidak. Prioritasnya ditentukan oleh konteks organisasi, bukan oleh benchmark.",
+      "datasource": { "type": "prometheus", "uid": "secmetrics-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 32 },
+      "targets": [
+        {
+          "refId": "A",
+          "editorMode": "code",
+          "expr": "secmetrics_compliance_check_info",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "job": true,
+              "component": true,
+              "instance": true,
+              "environment": true,
+              "monitor": true,
+              "benchmark": true,
+              "project": true,
+              "tool": true,
+              "status": true
+            },
+            "indexByName": { "check_id": 0, "section": 1 },
+            "renameByName": { "check_id": "Kontrol", "section": "Section" }
+          }
+        },
+        { "id": "sortBy", "options": { "fields": {}, "sort": [{ "field": "Kontrol" }] } }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": { "show": false, "reducer": ["sum"], "countRows": false, "fields": "" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "filterable": true },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Kontrol" },
+            "properties": [{ "id": "custom.width", "value": 90 }]
+          }
+        ]
+      }
     }
   ]
 }

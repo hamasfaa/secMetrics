@@ -5,7 +5,7 @@ from collections import Counter
 
 from prometheus_client import CollectorRegistry, Gauge
 
-from .models import SEVERITIES, SEVERITY_WEIGHTS, Finding
+from .models import SEVERITIES, SEVERITY_WEIGHTS, ComplianceCheck, Finding
 
 NAMESPACE = "secmetrics"
 
@@ -142,6 +142,104 @@ def build_registry(
                 f.target_type,
             ).set(1)
 
+            emitted += 1
+            if emitted >= detail_limit:
+                break
+
+    return registry
+
+
+COMPLIANCE_STATUSES = ("pass", "warn", "info", "note")
+
+
+def build_compliance_registry(
+    checks: list[ComplianceCheck],
+    project: str,
+    tool: str,
+    benchmark: str,
+    detail_limit: int = DEFAULT_DETAIL_LIMIT,
+    scan_success: bool = True,
+) -> CollectorRegistry:
+    registry = CollectorRegistry()
+
+    by_status: Counter[str] = Counter()
+    by_section_status: Counter[tuple[str, str]] = Counter()
+
+    for c in checks:
+        by_status[c.status] += 1
+        by_section_status[(c.section, c.status)] += 1
+
+    counts = Gauge(
+        f"{NAMESPACE}_compliance_checks",
+        "Jumlah kontrol benchmark per section dan per status.",
+        ["project", "tool", "benchmark", "section", "status"],
+        registry=registry,
+    )
+    sections = {s for s, _ in by_section_status}
+    for section in sections:
+        for status in COMPLIANCE_STATUSES:
+            counts.labels(project, tool, benchmark, section, status).set(
+                by_section_status.get((section, status), 0)
+            )
+
+    totals = Gauge(
+        f"{NAMESPACE}_compliance_checks_total_by_status",
+        "Jumlah kontrol benchmark per status, seluruh section.",
+        ["project", "tool", "benchmark", "status"],
+        registry=registry,
+    )
+    for status in COMPLIANCE_STATUSES:
+        totals.labels(project, tool, benchmark, status).set(by_status.get(status, 0))
+
+    scored = by_status.get("pass", 0) + by_status.get("warn", 0)
+    score = 100.0 * by_status.get("pass", 0) / scored if scored else 0.0
+
+    Gauge(
+        f"{NAMESPACE}_compliance_score",
+        "Persentase kontrol yang PASS dari seluruh kontrol yang bisa dinilai "
+        "(pass + warn). INFO dan NOTE tidak ikut dihitung.",
+        ["project", "tool", "benchmark"],
+        registry=registry,
+    ).labels(project, tool, benchmark).set(score)
+
+    Gauge(
+        f"{NAMESPACE}_compliance_checks_evaluated",
+        "Jumlah kontrol yang bisa dinilai otomatis (pass + warn). Menjadi "
+        "pembagi skor, dan berguna untuk memastikan skor tidak dihitung dari "
+        "sampel yang terlalu kecil.",
+        ["project", "tool", "benchmark"],
+        registry=registry,
+    ).labels(project, tool, benchmark).set(scored)
+
+    Gauge(
+        f"{NAMESPACE}_scan_timestamp_seconds",
+        "Unix timestamp saat scan terakhir selesai.",
+        ["project", "tool"],
+        registry=registry,
+    ).labels(project, tool).set(time.time())
+
+    Gauge(
+        f"{NAMESPACE}_scan_success",
+        "1 jika scan berjalan dan berhasil di-parse, 0 jika gagal.",
+        ["project", "tool"],
+        registry=registry,
+    ).labels(project, tool).set(1 if scan_success else 0)
+
+    if detail_limit > 0:
+        failed = Gauge(
+            f"{NAMESPACE}_compliance_check_info",
+            "Kontrol yang berstatus WARN (nilai selalu 1; informasinya ada "
+            "pada label).",
+            ["project", "tool", "benchmark", "check_id", "section", "status"],
+            registry=registry,
+        )
+        emitted = 0
+        for c in sorted(checks, key=lambda c: c.check_id):
+            if c.status != "warn":
+                continue
+            failed.labels(
+                project, tool, benchmark, c.check_id, c.section, c.status
+            ).set(1)
             emitted += 1
             if emitted >= detail_limit:
                 break

@@ -7,6 +7,14 @@ global:
     monitor: secmetrics
     environment: local
 
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 scrape_configs:
   - job_name: prometheus
     static_configs:
@@ -26,3 +34,9 @@ scrape_configs:
       - targets: ["pushgateway:9091"]
         labels:
           component: security
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]
+        labels:
+          component: monitoring
